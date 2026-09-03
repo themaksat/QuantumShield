@@ -1,0 +1,288 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./quantumshield.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Organization {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  users     User[]
+  projects  Project[]
+}
+
+model User {
+  id        String       @id @default(uuid())
+  email     String       @unique
+  name      String
+  role      String       @default("SECURITY_ENGINEER") // ADMIN, SECURITY_ENGINEER, DEVELOPER, AUDITOR
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+}
+
+model Project {
+  id           String        @id @default(uuid())
+  name         String
+  description  String?
+  orgId        String
+  org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  repositories Repository[]
+  auditEvents  AuditEvent[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Repository {
+  id              String           @id @default(uuid())
+  projectId       String
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name            String
+  url             String?
+  defaultBranch   String           @default("main")
+  localPath       String?
+  isCloned        Boolean          @default(false)
+  scans           Scan[]
+  cryptoAssets    CryptoAsset[]
+  findings        Finding[]
+  dependencyNodes DependencyNode[]
+  dependencyEdges DependencyEdge[]
+  migrationPlans  MigrationPlan[]
+  patches         Patch[]
+  pullRequests    PullRequest[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model Scan {
+  id              String           @id @default(uuid())
+  repositoryId    String
+  repository      Repository       @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  status          String           @default("QUEUED") // QUEUED, RUNNING, COMPLETED, FAILED
+  branch          String           @default("main")
+  commitSha       String?
+  durationMs      Int              @default(0)
+  totalAssets     Int              @default(0)
+  vulnerableCount Int              @default(0)
+  riskScore       Int              @default(0)
+  postureScore    Int              @default(100)
+  metadata        String?          // JSON
+  cryptoAssets    CryptoAsset[]
+  findings        Finding[]
+  dependencyNodes DependencyNode[]
+  dependencyEdges DependencyEdge[]
+  createdAt       DateTime         @default(now())
+  completedAt     DateTime?
+}
+
+model CryptoAsset {
+  id                  String     @id @default(uuid())
+  scanId              String
+  scan                Scan       @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  repositoryId        String
+  repository          Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  file                String
+  lineStart           Int
+  lineEnd             Int
+  language            String
+  assetType           String     // digital_signature, key_establishment, symmetric_crypto, hashing, certificate, pki, tls, etc.
+  algorithm           String
+  keySize             Int?
+  mode                String?
+  library             String
+  libraryVersion      String?
+  purpose             String
+  protocol            String?
+  quantumVulnerable   Boolean    @default(false)
+  riskScore           Int        @default(0)
+  confidence          Float      @default(1.0)
+  migrationStatus     String     @default("unmigrated")
+  recommendedStrategy String?
+  dependencies        String?    // JSON array of dependency strings
+  metadata            String?    // JSON
+  finding             Finding?
+  createdAt           DateTime   @default(now())
+}
+
+model Finding {
+  id                         String          @id @default(uuid())
+  scanId                     String
+  scan                       Scan            @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  repositoryId               String
+  repository                 Repository      @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  cryptoAssetId              String?         @unique
+  cryptoAsset                CryptoAsset?    @relation(fields: [cryptoAssetId], references: [id], onDelete: SetNull)
+  title                      String
+  severity                   String          // CRITICAL, HIGH, MEDIUM, LOW, INFO
+  status                     String          @default("DISCOVERED") // DISCOVERED, ASSESSED, PLAN_READY, PATCH_READY, VALIDATING, REVIEW_REQUIRED, APPROVED, PR_CREATED, MIGRATED, VERIFIED, BLOCKED
+  algorithm                  String
+  keyLength                  Int?
+  library                    String
+  file                       String
+  lineStart                  Int
+  lineEnd                    Int
+  codeSnippet                String
+  purpose                    String
+  quantumVulnerabilityDetail String
+  migrationComplexity        String          @default("MEDIUM") // LOW, MEDIUM, HIGH, COMPLEX
+  recommendedStrategy        String
+  confidence                 Float           @default(1.0)
+  riskScore                  Int             @default(0)
+  riskFactors                String          // JSON: [{"factor": "Quantum exposure", "score": 30}, ...]
+  affectedDependencies       String          // JSON: ["auth-service", "api-gateway"]
+  evidence                   String?         // AST extraction evidence
+  migrationPlans             MigrationPlan[]
+  patches                    Patch[]
+  validationRuns             ValidationRun[]
+  benchmarkRuns              BenchmarkRun[]
+  createdAt                  DateTime        @default(now())
+  updatedAt                  DateTime        @updatedAt
+}
+
+model DependencyNode {
+  id           String     @id @default(uuid())
+  scanId       String
+  scan         Scan       @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  nodeId       String     // Unique identifier within graph
+  label        String
+  nodeType     String     // SERVICE, MODULE, FILE, FUNCTION, CRYPTO_LIBRARY, ALGORITHM, PROTOCOL, KEY, EXTERNAL_SERVICE
+  metadata     String?    // JSON
+  createdAt    DateTime   @default(now())
+}
+
+model DependencyEdge {
+  id           String     @id @default(uuid())
+  scanId       String
+  scan         Scan       @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  sourceId     String
+  targetId     String
+  relation     String     // USES, IMPLEMENTS, IMPORTS, PROTECTS, CALLS
+  confidence   Float      @default(1.0)
+  createdAt    DateTime   @default(now())
+}
+
+model Policy {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  rules       String   // YAML/JSON policy rules
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model MigrationPlan {
+  id               String     @id @default(uuid())
+  findingId        String
+  finding          Finding    @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  repositoryId     String
+  repository       Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  strategy         String     // hybrid_transition, crypto_agility_abstraction, post_quantum_direct, etc.
+  currentAlgorithm String
+  targetAlgorithm  String
+  readiness        String     @default("READY") // READY, PARTIALLY_READY, BLOCKED
+  readinessReason  String?
+  steps            String     // JSON array of steps
+  risks            String     // JSON array of risks
+  prerequisites    String     // JSON array of prerequisites
+  patches          Patch[]
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+}
+
+model Patch {
+  id                  String          @id @default(uuid())
+  migrationPlanId     String
+  migrationPlan       MigrationPlan   @relation(fields: [migrationPlanId], references: [id], onDelete: Cascade)
+  findingId           String
+  finding             Finding         @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  repositoryId        String
+  repository          Repository      @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  targetFile          String
+  originalCode        String
+  generatedCode       String
+  diff                String
+  companionFiles      String?         // JSON: [{"path": "src/crypto/provider.ts", "content": "..."}]
+  rationale           String
+  rollbackNotes       String
+  securityAssumptions String
+  status              String          @default("DRAFT") // DRAFT, VALIDATING, VALIDATED, APPROVED, REJECTED, PR_CREATED
+  confidence          Float           @default(0.95)
+  validationRuns      ValidationRun[]
+  benchmarkRuns       BenchmarkRun[]
+  pullRequests        PullRequest[]
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+}
+
+model ValidationRun {
+  id                 String   @id @default(uuid())
+  patchId            String
+  patch              Patch    @relation(fields: [patchId], references: [id], onDelete: Cascade)
+  findingId          String
+  finding            Finding  @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  status             String   // PASS, WARNING, FAIL, REVIEW_REQUIRED
+  syntaxCheck        String   @default("PASS") // PASS, FAIL
+  buildCheck         String   @default("PASS")
+  testCheck          String   @default("PASS")
+  secretScanCheck    String   @default("PASS")
+  cryptoPolicyCheck  String   @default("PASS")
+  compatibilityCheck String   @default("PASS") // PASS, WARNING, FAIL
+  latencyImpact      String   @default("+0.0%")
+  payloadSizeDelta   String   @default("+0 KB")
+  details            String?  // JSON with detailed check output
+  createdAt          DateTime @default(now())
+}
+
+model BenchmarkRun {
+  id                     String   @id @default(uuid())
+  patchId                String
+  patch                  Patch    @relation(fields: [patchId], references: [id], onDelete: Cascade)
+  findingId              String
+  finding                Finding  @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  baselineHandshakeBytes Int      @default(0)
+  candidateHandshakeBytes Int     @default(0)
+  baselineCpuMs          Float    @default(0.0)
+  candidateCpuMs         Float    @default(0.0)
+  baselineLatencyMs      Float    @default(0.0)
+  candidateLatencyMs     Float    @default(0.0)
+  memoryDeltaBytes       Int      @default(0)
+  createdAt              DateTime @default(now())
+}
+
+model PullRequest {
+  id           String     @id @default(uuid())
+  patchId      String
+  patch        Patch      @relation(fields: [patchId], references: [id], onDelete: Cascade)
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  branchName   String
+  title        String
+  description  String
+  prUrl        String?
+  prNumber     Int?
+  status       String     @default("OPEN") // OPEN, MERGED, CLOSED
+  createdAt    DateTime   @default(now())
+}
+
+model AuditEvent {
+  id         String   @id @default(uuid())
+  projectId  String?
+  project    Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  actor      String   @default("system")
+  action     String   // SCAN_EXECUTED, FINDING_CREATED, FINDING_CHANGED, MIGRATION_GENERATED, PATCH_GENERATED, VALIDATION_EXECUTED, USER_APPROVED_PATCH, PR_CREATED, POLICY_CHANGED, FINDING_DISMISSED
+  objectType String
+  objectId   String
+  metadata   String?  // JSON
+  timestamp  DateTime @default(now())
+}
