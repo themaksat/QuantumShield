@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node server.js",
     "test": "tsx src/scripts/test-engine.ts"
   },
   "keywords": [],
