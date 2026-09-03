@@ -47,20 +47,44 @@ export function Shell({ children }: ShellProps) {
   const handleQuickScan = async () => {
     try {
       setIsScanning(true);
-      setScanToast({ type: "info", text: "Scanning repository with multi-language AST static analysis..." });
-      const res = await fetch("/api/seed-demo", { method: "POST" });
-      const data = await res.json();
-      if (data.projectId) {
-        const scanRes = await fetch(`/api/projects/${data.projectId}/scan`, { method: "POST" });
-        const scanData = await scanRes.json();
-        setScanToast({
-          type: "success",
-          text: `Scan complete: ${scanData.metrics?.totalAssets} assets indexed (${scanData.metrics?.quantumVulnerable} quantum vulnerable). Posture score: ${scanData.postureScore}/100.`,
-        });
-        setTimeout(() => {
-          window.location.reload();
-        }, 1200);
+      setScanToast({ type: "info", text: "Scanning target repository with AST static analysis..." });
+
+      // 1. Determine active repository
+      let activeRepoId = typeof window !== "undefined" ? localStorage.getItem("qs_active_repo_id") : null;
+      if (!activeRepoId) {
+        const repoRes = await fetch("/api/repositories");
+        const repoData = await repoRes.json();
+        if (repoData.repositories && repoData.repositories.length > 0) {
+          activeRepoId = repoData.repositories[0].id;
+        }
       }
+
+      if (!activeRepoId) {
+        throw new Error("No connected repository found. Please import a repository first.");
+      }
+
+      // 2. Fetch project ID
+      const projRes = await fetch("/api/projects");
+      const projData = await projRes.json();
+      const projectId = projData.projects?.[0]?.id;
+      if (!projectId) throw new Error("Default project could not be resolved");
+
+      // 3. Trigger live scan
+      const scanRes = await fetch(`/api/projects/${projectId}/scan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repositoryId: activeRepoId }),
+      });
+      const scanData = await scanRes.json();
+      if (!scanRes.ok) throw new Error(scanData.error || "Scan failed");
+
+      setScanToast({
+        type: "success",
+        text: `Live scan complete: ${scanData.metrics?.totalAssets || 0} crypto assets found (${scanData.metrics?.quantumVulnerable || 0} quantum vulnerable). Posture score: ${scanData.postureScore}/100.`,
+      });
+      setTimeout(() => {
+        window.location.reload();
+      }, 1200);
     } catch (e: any) {
       setScanToast({ type: "error", text: `Scan failed: ${e.message}` });
       setTimeout(() => setScanToast(null), 5000);

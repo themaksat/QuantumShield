@@ -49,7 +49,7 @@ export function RepositoryManager({
   const router = useRouter();
   const [repositories, setRepositories] = useState<RepoItem[]>(initialRepositories);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"demo" | "local" | "github">("demo");
+  const [activeTab, setActiveTab] = useState<"demo" | "local" | "github">("github");
   const [localPathInput, setLocalPathInput] = useState("");
   const [githubUrlInput, setGithubUrlInput] = useState("");
   const [repoNameInput, setRepoNameInput] = useState("");
@@ -120,12 +120,15 @@ export function RepositoryManager({
         if (!res.ok) throw new Error(data.error || "Failed to clone GitHub repository");
 
         setIsModalOpen(false);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("qs_active_repo_id", data.repository.id);
+        }
         setStatusMessage(
           `Cloned & Ingested "${data.repository.name}"! Discovered ${data.metrics?.totalAssets || 0} crypto assets (${data.metrics?.quantumVulnerable || 0} quantum vulnerable). Posture Score: ${data.postureScore}/100.`
         );
         router.refresh();
         setTimeout(() => {
-          window.location.reload();
+          window.location.href = `/?repoId=${data.repository.id}`;
         }, 1200);
         return;
       }
@@ -319,37 +322,37 @@ export function RepositoryManager({
             {/* Tab selection */}
             <div className="grid grid-cols-3 border-b border-slate-800 text-xs font-medium">
               <button
-                onClick={() => setActiveTab("demo")}
+                onClick={() => setActiveTab("github")}
                 className={`py-3 flex items-center justify-center gap-1.5 border-b-2 transition-all ${
-                  activeTab === "demo"
-                    ? "border-indigo-500 text-white bg-indigo-950/20"
+                  activeTab === "github"
+                    ? "border-indigo-500 text-white bg-indigo-950/20 font-bold"
                     : "border-transparent text-slate-400 hover:text-slate-200"
                 }`}
               >
-                <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
-                <span>Bundled Demo</span>
+                <GitBranch className="h-3.5 w-3.5 text-cyan-400" />
+                <span>GitHub Repository</span>
               </button>
               <button
                 onClick={() => setActiveTab("local")}
                 className={`py-3 flex items-center justify-center gap-1.5 border-b-2 transition-all ${
                   activeTab === "local"
-                    ? "border-indigo-500 text-white bg-indigo-950/20"
+                    ? "border-indigo-500 text-white bg-indigo-950/20 font-bold"
                     : "border-transparent text-slate-400 hover:text-slate-200"
                 }`}
               >
                 <FolderOpen className="h-3.5 w-3.5 text-amber-400" />
-                <span>Local Path</span>
+                <span>Local Directory</span>
               </button>
               <button
-                onClick={() => setActiveTab("github")}
+                onClick={() => setActiveTab("demo")}
                 className={`py-3 flex items-center justify-center gap-1.5 border-b-2 transition-all ${
-                  activeTab === "github"
-                    ? "border-indigo-500 text-white bg-indigo-950/20"
+                  activeTab === "demo"
+                    ? "border-indigo-500 text-white bg-indigo-950/20 font-bold"
                     : "border-transparent text-slate-400 hover:text-slate-200"
                 }`}
               >
-                <GitBranch className="h-3.5 w-3.5 text-slate-300" />
-                <span>GitHub URL</span>
+                <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+                <span>Sample Testbed</span>
               </button>
             </div>
 

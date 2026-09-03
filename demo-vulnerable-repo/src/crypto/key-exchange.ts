@@ -1,23 +1,22 @@
 import crypto from "crypto";
+import { HybridKeyExchangeProvider } from "./HybridKeyExchangeProvider";
 
 /**
- * Key agreement between payment microservices using classical ECDH (Elliptic Curve Diffie-Hellman).
- * VULNERABILITY: Quantum computers solving ECDLP can reconstruct shared secret
- * allowing passive decryption of stored communications ("Harvest Now, Decrypt Later").
+ * Hybrid Post-Quantum Key Agreement (X25519 + NIST FIPS 203 ML-KEM-768)
+ * Defends against Harvest-Now-Decrypt-Later (HNDL) quantum adversaries.
  */
 export class ServiceKeyExchange {
-  private ecdh: crypto.ECDH;
+  private hybridProvider: HybridKeyExchangeProvider;
 
-  constructor(curve = "secp256k1") {
-    this.ecdh = crypto.createECDH(curve);
-    this.ecdh.generateKeys();
+  constructor() {
+    this.hybridProvider = new HybridKeyExchangeProvider();
   }
 
   public getPublicKey(): Buffer {
-    return this.ecdh.getPublicKey();
+    return this.hybridProvider.getCompositePublicKey();
   }
 
   public computeSharedSecret(otherPublicKey: Buffer): Buffer {
-    return this.ecdh.computeSecret(otherPublicKey);
+    return this.hybridProvider.computeSharedSecret(otherPublicKey);
   }
 }
